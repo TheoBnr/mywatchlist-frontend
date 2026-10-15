@@ -107,31 +107,90 @@ function startEditing(entry: WatchlistEntry) {
   editingEntry.value = { ...entry }
 }
 
-// Änderungen speichern
-function saveEditedEntry(updatedEntry: WatchlistEntry) {
-  const index = entries.value.findIndex(
-    entry => entry.movieId === updatedEntry.movieId
-  )
+// Bestehende Einträge im Backend aktualisieren (PUT).
+const updating = ref(false)
 
-  if (index === -1) return
+async function saveEditedEntry(updatedEntry: WatchlistEntry) {
+  if (updating.value) return
 
-  entries.value[index] = updatedEntry
-  editingEntry.value = null
+  updating.value = true
+  errorMessage.value = ''
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/watchlist/${updatedEntry.movieId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: updatedEntry.title,
+        type: updatedEntry.type,
+        status: updatedEntry.status,
+        rating: updatedEntry.rating
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Backend antwortet mit HTTP ${response.status}`)
+    }
+
+    const savedEntry = (await response.json()) as BackendWatchlistEntry
+    const index = entries.value.findIndex(
+      entry => entry.movieId === updatedEntry.movieId
+    )
+
+    if (index !== -1) {
+      entries.value[index] = {
+        movieId: savedEntry.id,
+        title: savedEntry.title,
+        type: savedEntry.type,
+        status: savedEntry.status,
+        rating: savedEntry.rating
+      }
+    }
+
+    editingEntry.value = null
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren des Eintrags:', error)
+    errorMessage.value = 'Änderungen konnten nicht gespeichert werden. Bitte erneut versuchen.'
+  } finally {
+    updating.value = false
+  }
 }
 
 // Bearbeitung abbrechen
 function cancelEditing() {
+  if (updating.value) return
   editingEntry.value = null
 }
 
-// Eintrag löschen
-function deleteEntry(movieId: number) {
-  entries.value = entries.value.filter(
-    entry => entry.movieId !== movieId
-  )
+// Einträge erst nach erfolgreicher DELETE-Anfrage aus der Anzeige entfernen.
+const deletingIds = ref<number[]>([])
 
-  if (editingEntry.value?.movieId === movieId) {
-    editingEntry.value = null
+async function deleteEntry(movieId: number) {
+  if (deletingIds.value.includes(movieId)) return
+
+  deletingIds.value.push(movieId)
+  errorMessage.value = ''
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/watchlist/${movieId}`, {
+      method: 'DELETE'
+    })
+
+    if (!response.ok) {
+      throw new Error(`Backend antwortet mit HTTP ${response.status}`)
+    }
+
+    // DELETE liefert HTTP 204 ohne JSON-Body.
+    entries.value = entries.value.filter(entry => entry.movieId !== movieId)
+
+    if (editingEntry.value?.movieId === movieId) {
+      editingEntry.value = null
+    }
+  } catch (error) {
+    console.error('Fehler beim Löschen des Eintrags:', error)
+    errorMessage.value = 'Der Eintrag konnte nicht gelöscht werden. Bitte erneut versuchen.'
+  } finally {
+    deletingIds.value = deletingIds.value.filter(id => id !== movieId)
   }
 }
 
