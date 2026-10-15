@@ -57,18 +57,46 @@ onMounted(loadWatchlist)
 const search = ref('')
 const selectedStatus = ref('Alle')
 
-// Neue Einträge hinzufügen
-function addEntry(
-  newEntry: Pick<WatchlistEntry, 'title' | 'type' | 'status'>
-) {
-  const nextId =
-    Math.max(0, ...entries.value.map(entry => entry.movieId)) + 1
+// Neue Einträge im Backend speichern; PostgreSQL erzeugt die ID.
+const saving = ref(false)
 
-  entries.value.push({
-    movieId: nextId,
-    ...newEntry,
-    rating: null
-  })
+async function addEntry(
+  newEntry: Pick<WatchlistEntry, 'title' | 'type' | 'status'>,
+  resetForm: () => void
+) {
+  if (saving.value) return
+
+  saving.value = true
+  errorMessage.value = ''
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/watchlist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newEntry, rating: null })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Backend antwortet mit HTTP ${response.status}`)
+    }
+
+    const savedEntry = (await response.json()) as BackendWatchlistEntry
+
+    entries.value.push({
+      movieId: savedEntry.id,
+      title: savedEntry.title,
+      type: savedEntry.type,
+      status: savedEntry.status,
+      rating: savedEntry.rating
+    })
+
+    resetForm()
+  } catch (error) {
+    console.error('Fehler beim Speichern des Eintrags:', error)
+    errorMessage.value = 'Der Eintrag konnte nicht gespeichert werden. Bitte erneut versuchen.'
+  } finally {
+    saving.value = false
+  }
 }
 
 // Aktuell ausgewählter Eintrag zum Bearbeiten
@@ -141,7 +169,7 @@ const filteredEntries = computed(() => {
           an einem Ort.
         </p>
       </section>
-      <AddEntryForm @add="addEntry" />
+      <AddEntryForm :saving="saving" @add="addEntry" />
 
       <EditEntryForm
         v-if="editingEntry"
@@ -177,10 +205,10 @@ const filteredEntries = computed(() => {
         <span>{{ filteredEntries.length }} Einträge</span>
       </div>
 
-      <p v-if="loading" role="status">Watchlist wird geladen ...</p>
-      <p v-else-if="errorMessage" role="alert" class="error-message">
+      <p v-if="errorMessage" role="alert" class="error-message">
         {{ errorMessage }}
       </p>
+      <p v-if="loading" role="status">Watchlist wird geladen ...</p>
       <WatchlistList
         v-else
         :entries="filteredEntries"

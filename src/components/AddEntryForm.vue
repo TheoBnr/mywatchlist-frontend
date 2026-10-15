@@ -7,8 +7,10 @@ const title = ref('')
 const type = ref('Film')
 const status = ref('Geplant')
 
+defineProps<{ saving: boolean }>()
+
 const emit = defineEmits<{
-  add: [entry: Pick<WatchlistEntry, 'title' | 'type' | 'status'>]
+  add: [entry: Pick<WatchlistEntry, 'title' | 'type' | 'status'>, resetForm: () => void]
 }>()
 
 function submitEntry() {
@@ -20,9 +22,10 @@ function submitEntry() {
     title: cleanTitle,
     type: type.value,
     status: status.value
-  })
+  }, resetForm)
+}
 
-  // Formular zurücksetzen
+function resetForm() {
   title.value = ''
   type.value = 'Film'
   status.value = 'Geplant'
@@ -63,7 +66,7 @@ function submitEntry() {
         </select>
       </div>
 
-      <button type="submit">+ Hinzufügen</button>
+      <button type="submit" :disabled="saving">{{ saving ? 'Speichert ...' : '+ Hinzufügen' }}</button>
     </form>
   </section>
 </template>
@@ -124,7 +127,12 @@ button {
   font-weight: 600;
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background: #5b66e8;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
