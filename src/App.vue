@@ -1,36 +1,58 @@
 
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import WatchlistList from './components/WatchlistList.vue'
 import AddEntryForm from './components/AddEntryForm.vue'
 import EditEntryForm from './components/EditEntryForm.vue'
 import type { WatchlistEntry } from './types/WatchlistEntry'
 
-// Unsere Watchlist ist jetzt reaktiv
-const entries = ref<WatchlistEntry[]>([
-  {
-    movieId: 1,
-    title: 'Breaking Bad',
-    type: 'Serie',
-    status: 'Abgeschlossen',
-    rating: 10
-  },
-  {
-    movieId: 2,
-    title: 'Interstellar',
-    type: 'Film',
-    status: 'Geplant',
-    rating: null
-  },
-  {
-    movieId: 3,
-    title: 'Dark',
-    type: 'Serie',
-    status: 'Am Schauen',
-    rating: 9
+// Form der JSON-Objekte aus dem Spring-Boot-Backend (id statt movieId)
+type BackendWatchlistEntry = Omit<WatchlistEntry, 'movieId'> & {
+  id: number
+}
+
+// Die Watchlist wird nicht mehr fest im Frontend hinterlegt.
+const entries = ref<WatchlistEntry[]>([])
+const loading = ref(true)
+const errorMessage = ref('')
+
+// Lokal: http://localhost:8080 | Auf Render: VITE_API_BASE_URL konfigurieren
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+).replace(/\/$/, '')
+
+async function loadWatchlist() {
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/watchlist`)
+
+    if (!response.ok) {
+      throw new Error(`Backend antwortet mit HTTP ${response.status}`)
+    }
+
+    const backendEntries = (await response.json()) as BackendWatchlistEntry[]
+
+    // Backend-Feld "id" in das Frontend-Feld "movieId" übersetzen.
+    entries.value = backendEntries.map(({ id, title, type, status, rating }) => ({
+      movieId: id,
+      title,
+      type,
+      status,
+      rating
+    }))
+  } catch (error) {
+    console.error('Fehler beim Laden der Watchlist:', error)
+    errorMessage.value = 'Die Watchlist konnte nicht geladen werden. Prüfe die Backend-Verbindung.'
+  } finally {
+    loading.value = false
   }
-])
+}
+
+// Beim Öffnen der Vue-App die Backend-Daten laden.
+onMounted(loadWatchlist)
 
 const search = ref('')
 const selectedStatus = ref('Alle')
@@ -155,7 +177,12 @@ const filteredEntries = computed(() => {
         <span>{{ filteredEntries.length }} Einträge</span>
       </div>
 
+      <p v-if="loading" role="status">Watchlist wird geladen ...</p>
+      <p v-else-if="errorMessage" role="alert" class="error-message">
+        {{ errorMessage }}
+      </p>
       <WatchlistList
+        v-else
         :entries="filteredEntries"
         @edit="startEditing"
         @delete="deleteEntry"
@@ -266,6 +293,10 @@ body {
 
 .section-heading span {
   color: #aab6cd;
+}
+
+.error-message {
+  color: #ffb5c3;
 }
 
 @media (max-width: 600px) {
