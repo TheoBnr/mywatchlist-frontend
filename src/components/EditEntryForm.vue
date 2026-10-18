@@ -6,6 +6,8 @@ import type { WatchlistEntry } from '../types/WatchlistEntry'
 
 const props = defineProps<{
   entry: WatchlistEntry
+  fieldErrors: Record<string, string>
+  updating: boolean
 }>()
 
 const emit = defineEmits<{
@@ -58,7 +60,13 @@ function saveChanges() {
 <template>
   <section class="edit-panel">
     <h2>Eintrag bearbeiten</h2>
-
+    <p
+      v-if="Object.keys(fieldErrors).length > 0"
+      class="form-error"
+      role="alert"
+    >
+      Bitte korrigiere die markierten Eingabefelder.
+    </p>
     <form @submit.prevent="saveChanges">
       <div class="form-group">
         <label for="edit-title">Titel</label>
@@ -66,9 +74,18 @@ function saveChanges() {
           id="edit-title"
           v-model="title"
           type="text"
-          maxlength="100"
+          maxlength="200"
           required
+          :aria-invalid="Boolean(fieldErrors.title)"
+          :aria-describedby="fieldErrors.title ? 'edit-title-error' : undefined"
         />
+        <p
+          v-if="fieldErrors.title"
+          id="edit-title-error"
+          class="field-error"
+        >
+          {{ fieldErrors.title }}
+        </p>
       </div>
 
       <div class="form-group">
@@ -77,6 +94,9 @@ function saveChanges() {
           <option value="Film">Film</option>
           <option value="Serie">Serie</option>
         </select>
+        <p v-if="fieldErrors.type" class="field-error">
+          {{ fieldErrors.type }}
+        </p>
       </div>
 
       <div class="form-group">
@@ -88,6 +108,9 @@ function saveChanges() {
             Abgeschlossen
           </option>
         </select>
+        <p v-if="fieldErrors.status" class="field-error">
+          {{ fieldErrors.status }}
+        </p>
       </div>
 
 
@@ -105,11 +128,18 @@ function saveChanges() {
           step="1"
           placeholder="Keine Bewertung"
         />
+        <p v-if="fieldErrors.rating" class="field-error">
+          {{ fieldErrors.rating }}
+        </p>
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="save-button">
-          Speichern
+        <button
+          type="submit"
+          class="save-button"
+          :disabled="updating"
+        >
+          {{ updating ? 'Speichert ...' : 'Speichern' }}
         </button>
 
         <button
@@ -194,5 +224,28 @@ button {
   form {
     grid-template-columns: 1fr;
   }
+}
+.field-error,
+.form-error {
+  color: #ffb5c3;
+  font-size: 14px;
+}
+
+.field-error {
+  margin: 4px 0 0;
+}
+
+.form-error {
+  margin-bottom: 16px;
+}
+
+input[aria-invalid="true"],
+select[aria-invalid="true"] {
+  border-color: #ff7b94;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

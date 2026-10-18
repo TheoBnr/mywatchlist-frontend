@@ -193,4 +193,100 @@ describe('MyWatchlist – Frontend', () => {
     expect((wrapper.get('#title').element as HTMLInputElement).value).toBe('Inception')
     expect(wrapper.findAll('.watchlist-card')).toHaveLength(0)
   })
+
+  it('zeigt Backend-Validierungsfehler direkt am Titelfeld an', async () => {
+    fetchMock
+      .mockResolvedValueOnce(successResponse([]))
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          message: 'Ungültige Eingaben.',
+          errors: {
+            title: 'Der Titel darf nicht leer sein.'
+          }
+        })
+      })
+
+    const wrapper = mount(App)
+    await flushPromises()
+
+    await wrapper.get('#title').setValue('Inception')
+    await wrapper.get('.form-container form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('#title-error').text())
+      .toBe('Der Titel darf nicht leer sein.')
+
+    expect(wrapper.get('#title').attributes('aria-invalid'))
+      .toBe('true')
+
+    expect((wrapper.get('#title').element as HTMLInputElement).value)
+      .toBe('Inception')
+
+    expect(wrapper.findAll('.watchlist-card')).toHaveLength(0)
+  })
+
+  it('zeigt Validierungsfehler beim Bearbeiten und behält die Eingabe', async () => {
+    fetchMock
+      .mockResolvedValueOnce(successResponse([interstellar]))
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          message: 'Ungültige Eingaben.',
+          errors: {
+            title: 'Der Titel ist ungültig.'
+          }
+        })
+      })
+
+    const wrapper = mount(App)
+    await flushPromises()
+
+    await wrapper.get('.edit-button').trigger('click')
+    await wrapper.get('#edit-title').setValue('Neuer Titel')
+    await wrapper.get('.edit-panel form').trigger('submit')
+    await flushPromises()
+
+    // Fehlermeldung am Eingabefeld
+    expect(wrapper.get('#edit-title-error').text())
+      .toBe('Der Titel ist ungültig.')
+
+    // Feld als ungültig gekennzeichnet
+    expect(wrapper.get('#edit-title').attributes('aria-invalid'))
+      .toBe('true')
+
+    // Bearbeitungsformular bleibt geöffnet
+    expect(wrapper.find('.edit-panel').exists()).toBe(true)
+
+    // Eingabe bleibt erhalten
+    expect(
+      (wrapper.get('#edit-title').element as HTMLInputElement).value
+    ).toBe('Neuer Titel')
+
+    // Gespeicherter Eintrag bleibt unverändert
+    expect(wrapper.get('.watchlist-card').text())
+      .toContain('Interstellar')
+  })
+
+  it('begrenzt die Titellänge in beiden Formularen auf 200 Zeichen', async () => {
+    fetchMock.mockResolvedValueOnce(successResponse([interstellar]))
+
+    const wrapper = mount(App)
+    await flushPromises()
+
+    // Formular zum Hinzufügen
+    const addTitle = wrapper.get('#title')
+
+    expect(addTitle.attributes('maxlength')).toBe('200')
+
+    // Bearbeitungsformular öffnen
+    await wrapper.get('.edit-button').trigger('click')
+
+    const editTitle = wrapper.get('#edit-title')
+
+    expect(editTitle.attributes('maxlength')).toBe('200')
+  })
+
 })

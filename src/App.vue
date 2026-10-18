@@ -59,6 +59,32 @@ const selectedStatus = ref('Alle')
 
 // Neue Einträge im Backend speichern; PostgreSQL erzeugt die ID.
 const saving = ref(false)
+const addFieldErrors = ref<Record<string, string>>({})
+
+
+async function getValidationErrors(
+  response: Response
+): Promise<Record<string, string> | null> {
+  if (response.status !== 400) return null
+
+  try {
+    const data = (await response.json()) as {
+      errors?: Record<string, string>
+    }
+
+    if (
+      data?.errors &&
+      typeof data.errors === 'object' &&
+      !Array.isArray(data.errors)
+    ) {
+      return data.errors
+    }
+  } catch {
+    // Keine gültige JSON-Fehlerantwort vorhanden
+  }
+
+  return null
+}
 
 async function addEntry(
   newEntry: Pick<WatchlistEntry, 'title' | 'type' | 'status'>,
@@ -68,6 +94,7 @@ async function addEntry(
 
   saving.value = true
   errorMessage.value = ''
+  addFieldErrors.value = {}
 
   try {
     const response = await fetch(`${API_BASE_URL}/watchlist`, {
@@ -77,6 +104,13 @@ async function addEntry(
     })
 
     if (!response.ok) {
+      const validationErrors = await getValidationErrors(response)
+
+      if (validationErrors && Object.keys(validationErrors).length > 0) {
+        addFieldErrors.value = validationErrors
+        return
+      }
+
       throw new Error(`Backend antwortet mit HTTP ${response.status}`)
     }
 
@@ -104,17 +138,21 @@ const editingEntry = ref<WatchlistEntry | null>(null)
 
 // Bearbeitung starten
 function startEditing(entry: WatchlistEntry) {
+  editFieldErrors.value = {}
+  errorMessage.value = ''
   editingEntry.value = { ...entry }
 }
 
 // Bestehende Einträge im Backend aktualisieren (PUT).
 const updating = ref(false)
+const editFieldErrors = ref<Record<string, string>>({})
 
 async function saveEditedEntry(updatedEntry: WatchlistEntry) {
   if (updating.value) return
 
   updating.value = true
   errorMessage.value = ''
+  editFieldErrors.value = {}
 
   try {
     const response = await fetch(`${API_BASE_URL}/watchlist/${updatedEntry.movieId}`, {
@@ -129,6 +167,13 @@ async function saveEditedEntry(updatedEntry: WatchlistEntry) {
     })
 
     if (!response.ok) {
+      const validationErrors = await getValidationErrors(response)
+
+      if (validationErrors && Object.keys(validationErrors).length > 0) {
+        editFieldErrors.value = validationErrors
+        return
+      }
+
       throw new Error(`Backend antwortet mit HTTP ${response.status}`)
     }
 
@@ -159,6 +204,8 @@ async function saveEditedEntry(updatedEntry: WatchlistEntry) {
 // Bearbeitung abbrechen
 function cancelEditing() {
   if (updating.value) return
+
+  editFieldErrors.value = {}
   editingEntry.value = null
 }
 
@@ -228,12 +275,18 @@ const filteredEntries = computed(() => {
           an einem Ort.
         </p>
       </section>
-      <AddEntryForm :saving="saving" @add="addEntry" />
+      <AddEntryForm
+        :saving="saving"
+        :field-errors="addFieldErrors"
+        @add="addEntry"
+      />
 
       <EditEntryForm
         v-if="editingEntry"
         :key="editingEntry.movieId"
         :entry="editingEntry"
+        :field-errors="editFieldErrors"
+        :updating="updating"
         @save="saveEditedEntry"
         @cancel="cancelEditing"
       />
